@@ -112,10 +112,14 @@ proc forward (nn: NN, x: seq[seq[float64]]): seq[seq[float64]] =
   return softmax(z2)
 
 proc backward (nn: var NN, o: seq[seq[float64]], y: seq[seq[float64]], x: seq[seq[float64]], alpha: float64): void =
-  let dW2 = matmul((o - y), ReLU(matmul(nn.W1, x) + nn.B1).transpose())
-  let dW1 = matmul(matmul(nn.W2.transpose(), (o - y)) * dReLU(matmul(nn.W1, x) + nn.B1), x.transpose())
-  let dB2 = o - y
-  let dB1 = matmul(nn.W2.transpose(), (o - y)) * dReLU(matmul(nn.W1, x) + nn.B1)
+  let z1 = matmul(nn.W1, x) + nn.B1
+  let dCCELSoftmax = o - y
+  let tW2 = nn.W2.transpose()
+
+  let dW2 = matmul(dCCELSoftmax, ReLU(z1).transpose())
+  let dW1 = matmul(matmul(tW2, dCCELSoftmax) * dReLU(z1), x.transpose())
+  let dB2 = dCCELSoftmax
+  let dB1 = matmul(tW2, dCCELSoftmax) * dReLU(z1)
 
   nn.W2 = nn.W2 - alpha * dW2
   nn.W1 = nn.W1 - alpha * dW1
@@ -158,20 +162,17 @@ var testData = loadMNISTData("mnist/mnist_test.csv")
 var nn = NN()
 nn.init()
 
+var alpha = 0.01'f64
 for epoch in 1..20:
   trainingData.shuffle()
-  var alpha = 0.01'f64
-  for data in trainingData:
+  for i, data in trainingData:
     let output = nn.forward(data.image)
     var expected: seq[seq[float64]] = repeat(@[0.0'f64], 10)
     expected[data.label][0] = 1.0'f64
     nn.backward(output, expected, data.image, alpha)
     let loss = categoricalCrossEntropyLoss(output, data.label)
+    echo "Training sample: " & $i & " Loss: " & $loss
 
-    if loss.isNaN():
-      echo output
-      echo expected
-      break
   alpha *= 0.99
 
 var count = 0
